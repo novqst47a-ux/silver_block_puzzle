@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const boardEl=$("board"), tray=$("tray"), panel=$("panel");
-const storageKey="hanjul-madang:"+new URL(".",location.href).pathname+":v1";
+const storageKey=gameStorageKey("hanjul-madang","v1");
 const initialSeed=(Math.random()*4294967296)>>>0;
 const playableSizes=[8];
 function newSession(n,seed) {

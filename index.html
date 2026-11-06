@@ -6,11 +6,14 @@
   <meta name="theme-color" content="#f7f4e9">
   <title>한 줄 마당 · 블록 퍼즐</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./style.css">
+  <script defer src="./storage.js"></script>
   <script defer src="./rules.js"></script>
   <script defer src="./portraits.js"></script>
   <script defer src="./game.js"></script>
+  <script defer src="./install.js"></script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="icons"><defs>
@@ -39,6 +42,7 @@
 <p id="instruction" role="status">조각을 누르고 빈칸을 누르세요. 끌어서 놓아도 좋아요.</p>
 <div class="actionrow"><button id="undoBtn"><svg><use href="#undo"/></svg>되돌리기</button><button id="hintBtn"><svg><use href="#hint"/></svg>자리 보기</button></div>
 <button id="endBtn" hidden>새 판 시작</button></section>
+<button id="installBtn" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>앱 설치</button>
 </aside>
 </main>
 <div id="notice" role="status"></div>

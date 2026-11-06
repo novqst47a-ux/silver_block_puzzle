@@ -67,5 +67,7 @@ header{background:#fffcf6;border-color:#dbcebd}
 .assignment .shape{--unit:15px}.assignment select{max-width:100%;font:inherit;color:inherit;padding:6px;min-height:44px;background:var(--paper);border:1px solid #ac9983;border-radius:9px}
 .privacy{color:#5f6256;font-size:.92rem}#cropPreview{display:block;width:min(82%,240px);margin:16px auto;border:4px solid #f2c985;border-radius:30%;touch-action:none;user-select:none;cursor:grab}#cropPreview.dragging{cursor:grabbing}
 .cropZoom{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:50px}.cropZoom input{width:62%;accent-color:var(--green);height:32px}
+#installBtn{order:6;min-height:50px}
+@media(max-width:720px){#installBtn{margin-top:10px}}
 @media(max-width:720px){#photoBtn{font-size:.96rem;min-height:44px}.slot .shape{--unit:21px}}
 @media(prefers-reduced-motion:reduce){.pop-photo,.petal{animation:none}.petal{display:none}}

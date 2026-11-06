@@ -2,7 +2,7 @@
 
 // The album is independent from game saves: undo never duplicates image bytes.
 const Portraits = (() => {
-  const key="hanjul-album:"+new URL(".",location.href).pathname+":1";
+  const key=gameStorageKey("hanjul-album","1");
   const limit=Puzzle.shapes.length;
   const defaults=()=>({photos:[],assignments:{}});
   const center={x:50,y:50,zoom:1};

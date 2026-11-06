@@ -10,6 +10,10 @@ const Puzzle = (() => {
     ["작은 네모", [[0,0],[0,1],[1,0],[1,1]]],
     ["기역 모양", [[0,0],[0,1],[1,1]]]
   ];
+  const shapeSizes = shapes.map(([,cells]) => ({
+    width: 1 + Math.max(...cells.map(([,dx]) => dx)),
+    height: 1 + Math.max(...cells.map(([dy]) => dy))
+  }));
   const colors = ["a","b","c","d","e"];
   function fresh(n, seed) {
     const board={n,cells:Array(n*n).fill(""),pieces:[],score:0,lines:0,seed,hand:[{shape:0,color:"b"},{shape:1,color:"a"},{shape:2,color:"c"}]};
@@ -32,6 +36,34 @@ const Puzzle = (() => {
       const y=r+dy,x=c+dx;
       return y>=0 && x>=0 && y<board.n && x<board.n && !board.cells[y*board.n+x];
     });
+  }
+  // Aim coordinates use cell centers: (0, 0) is the center of the first cell.
+  function placementAnchor(board,piece,aimRow,aimCol) {
+    if (!piece) return -1;
+    const {height,width}=shapeSizes[piece.shape];
+    const lastRow=board.n-height, lastCol=board.n-width;
+    const row=Math.max(0,Math.min(lastRow,Math.round(aimRow)));
+    const col=Math.max(0,Math.min(lastCol,Math.round(aimCol)));
+    const anchor=row*board.n+col;
+    if (fits(board,piece,row,col)) return anchor;
+
+    // A blocked anchor may shift one cell in either direction. Keep an invalid
+    // preview at the original in-bounds anchor if all of its neighbors are blocked.
+    let best=anchor, bestDistance=Infinity, bestCoversTarget=false;
+    const targetRow=Math.round(aimRow), targetCol=Math.round(aimCol);
+    for (let r=Math.max(0,row-1);r<=Math.min(lastRow,row+1);r++) {
+      for (let c=Math.max(0,col-1);c<=Math.min(lastCol,col+1);c++) {
+        const distance=(r-aimRow)**2+(c-aimCol)**2;
+        if (distance>bestDistance || !fits(board,piece,r,c)) continue;
+        const coversTarget=shapes[piece.shape][1].some(([dy,dx]) => r+dy===targetRow && c+dx===targetCol);
+        if (distance<bestDistance || (coversTarget && !bestCoversTarget)) {
+          best=r*board.n+c;
+          bestDistance=distance;
+          bestCoversTarget=coversTarget;
+        }
+      }
+    }
+    return best;
   }
   function spot(board,piece) {
     for (let i=0;i<board.cells.length;i++) if (fits(board,piece,Math.floor(i/board.n),i%board.n)) return i;
@@ -75,5 +107,5 @@ const Puzzle = (() => {
     }
     return {count,added,cleared:[...cleared],hits};
   }
-  return {shapes,colors,fresh,fits,spot,place};
+  return {shapes,shapeSizes,colors,fresh,fits,placementAnchor,spot,place};
 })();

@@ -1,6 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const boardEl=$("board"), tray=$("tray"), panel=$("panel");
+const boardFrame=boardEl.closest(".frame");
 const storageKey=gameStorageKey("hanjul-madang","v1");
 const initialSeed=(Math.random()*4294967296)>>>0;
 const playableSizes=[8];
@@ -70,8 +71,9 @@ function renderBoard() {
 function shapeView(piece) {
   const coords=Puzzle.shapes[piece.shape][1], shape=document.createElement("span");
   shape.className="shape";shape.setAttribute("aria-hidden","true");
-  shape.style.setProperty("--w",1+Math.max(...coords.map(p=>p[1])));
-  shape.style.setProperty("--h",1+Math.max(...coords.map(p=>p[0])));
+  const {width,height}=Puzzle.shapeSizes[piece.shape];
+  shape.style.setProperty("--w",width);
+  shape.style.setProperty("--h",height);
   shape.style.setProperty("--tile","var(--"+piece.color+")");
   coords.forEach(([r,c],idx)=>{
     const wrap=document.createElement("i");wrap.style.gridArea=(r+1)+"/"+(c+1);
@@ -121,7 +123,7 @@ function render(msg=defaultHelp){
 function select(idx){
   if (!board().hand[idx]) return;
   selected=idx;showSelection();preview(-1);
-  say(nameOf(board().hand[idx])+" 조각이에요. 점이 있는 칸을 놓을 자리를 눌러 주세요.");
+  say(nameOf(board().hand[idx])+" 조각이에요. 놓고 싶은 자리를 눌러 주세요.");
 }
 function commit(index){
   if (selected===null || index<0) return;
@@ -142,8 +144,15 @@ function commit(index){
   }
 }
 function atPoint(x,y){
-  const rect=boardEl.getBoundingClientRect(),c=Math.floor((x-rect.left)*state.size/rect.width),r=Math.floor((y-rect.top)*state.size/rect.height);
-  return finiteSpot(r,c)?r*state.size+c:-1;
+  const frame=boardFrame.getBoundingClientRect();
+  if (x<frame.left || x>=frame.right || y<frame.top || y>=frame.bottom) return -1;
+  const rect=boardEl.getBoundingClientRect(),b=board();
+  const row=(y-rect.top)*b.n/rect.height-0.5, col=(x-rect.left)*b.n/rect.width-0.5;
+  return Puzzle.placementAnchor(b,b.hand[selected],row,col);
+}
+function targetForCell(index){
+  const b=board();
+  return Puzzle.placementAnchor(b,b.hand[selected],Math.floor(index/b.n),index%b.n);
 }
 function cancelGesture(){
   if (gesture?.target.hasPointerCapture(gesture.id)) gesture.target.releasePointerCapture(gesture.id);
@@ -158,9 +167,9 @@ tray.addEventListener("pointerdown",ev=>{
   const btn=ev.target.closest(".slot");
   if (btn&&!btn.disabled&&start(ev,btn,"tray"))select(+btn.dataset.slot);
 });
-boardEl.addEventListener("pointerdown",ev=>{
+boardFrame.addEventListener("pointerdown",ev=>{
   if (selected===null) return;
-  if (start(ev,boardEl,"board"))preview(atPoint(ev.clientX,ev.clientY));
+  if (start(ev,boardFrame,"board"))preview(atPoint(ev.clientX,ev.clientY));
 });
 document.addEventListener("pointermove",ev=>{
   const g=gesture;if (!g||g.id!==ev.pointerId) return;
@@ -189,7 +198,7 @@ tray.addEventListener("click",ev=>{
 boardEl.addEventListener("click",ev=>{
   const el=ev.target.closest(".cell");
   if (!el) return;
-  if (ev.detail===0) commit(+el.dataset.index);
+  if (ev.detail===0) commit(targetForCell(+el.dataset.index));
   else if (selected===null&&el.isConnected&&!noMoves()) say("먼저 아래에서 놓을 조각을 골라 주세요.");
 });
 boardEl.addEventListener("focusin",ev=>{
@@ -197,16 +206,17 @@ boardEl.addEventListener("focusin",ev=>{
   const next=+ev.target.dataset.index;
   boardEl.querySelector('[tabindex="0"]')?.setAttribute("tabindex","-1");
   ev.target.tabIndex=0;focusIndex=next;
+  if (!gesture && selected!==null) preview(targetForCell(next));
 });
 boardEl.addEventListener("keydown",ev=>{
   const n=state.size,r=Math.floor(focusIndex/n),c=focusIndex%n;
   if(ev.key==="Enter"||ev.key===" "){
-    ev.preventDefault();commit(focusIndex);boardEl.querySelector('[tabindex="0"]').focus();return;
+    ev.preventDefault();commit(targetForCell(focusIndex));boardEl.querySelector('[tabindex="0"]').focus();return;
   }
   const dir={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}[ev.key];
   if(!dir)return;
   ev.preventDefault();if(!finiteSpot(r+dir[0],c+dir[1]))return;
-  const next=(r+dir[0])*n+c+dir[1];boardEl.querySelector('[data-index="'+next+'"]').focus();preview(next);
+  const next=(r+dir[0])*n+c+dir[1];boardEl.querySelector('[data-index="'+next+'"]').focus();
 });
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!panel.open){cancelGesture();selected=null;showSelection();preview(-1);say(defaultHelp);}});
 if (playableSizes.length>1) {
@@ -241,7 +251,7 @@ function dialog(title,content){
 }
 $("closeBtn").onclick=()=>panel.close();
 $("photoBtn").onclick=()=>Portraits.openAlbum();
-$("helpBtn").onclick=()=>dialog("놀이 방법",`<ol><li>아래 조각 세 개 중 하나를 골라요. 색은 달라도 괜찮아요.</li><li><b>눌러 놓기</b>는 조각을 누른 뒤, 조각의 점이 올 빈칸을 눌러요.</li><li><b>끌어 놓기</b>는 조각을 판으로 끌고 가서 점선이 보일 때 손을 떼요.</li><li>가로나 세로 한 줄이 차면 사라져요. 놓은 칸마다 1점, 지운 줄마다 10점이에요.</li></ol><p>키보드는 Tab으로 조각과 판을 찾고 방향키와 Enter로 놓을 수 있어요.</p><button class="primary" data-do="close">놀이로 돌아가기</button>`);
+$("helpBtn").onclick=()=>dialog("놀이 방법",`<ol><li>아래 조각 세 개 중 하나를 골라요. 색은 달라도 괜찮아요.</li><li><b>눌러 놓기</b>는 조각을 누른 뒤, 놓고 싶은 칸을 눌러요.</li><li><b>끌어 놓기</b>는 조각을 판으로 끌고 가서 점선을 보고 손을 떼요. 가장자리에서는 조각이 판 안쪽으로 들어오고, 다른 조각에 걸리면 바로 옆에 놓을 자리가 있는지 찾아줘요.</li><li>가로나 세로 한 줄이 차면 사라져요. 놓은 칸마다 1점, 지운 줄마다 10점이에요.</li></ol><p>키보드는 Tab으로 조각과 판을 찾고 방향키와 Enter로 놓을 수 있어요.</p><button class="primary" data-do="close">놀이로 돌아가기</button>`);
 function pause(){dialog("잠깐 쉬기",`<p>같은 기기와 브라우저에서 두던 판을 이어 할 수 있어요.</p><p>${navigator.serviceWorker?.controller?"오프라인 준비가 끝났어요.":"온라인에서 게임을 이용하고 있어요."}</p><div class="stack"><button class="primary" data-do="close">이어 하기</button><button data-do="new">새 판 시작</button></div>`);}
 $("pauseBtn").onclick=pause;
 function confirmNew(){dialog("새 판을 시작할까요?",`<p>현재 ${state.size}×${state.size} 판을 마치고 점수를 최고 기록과 비교해요.</p><div class="stack"><button class="primary" data-do="restart">새 판 시작</button><button data-do="close">계속하기</button></div>`);}

@@ -1,5 +1,5 @@
 const prefix="hanjul:"+self.registration.scope+":";
-const cacheName=prefix+"8";
+const cacheName=prefix+"9";
 const files=["./","./index.html","./style.css","./storage.js","./rules.js","./portraits.js","./game.js","./install.js",
   "./manifest.webmanifest","./icon.svg","./icons/icon-192.png","./icons/icon-512.png"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(cacheName).then(c=>c.addAll(files))));

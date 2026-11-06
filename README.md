@@ -10,9 +10,9 @@
 
 [GitHub Pages 배포 폴더 설정](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 
-## 휴대폰에 앱 설치
+## Android에서 앱 설치
 
-게임 화면의 **앱 설치**를 누릅니다. Android Chrome에서는 설치 창에서 확인하고, iPhone에서는 Safari의 **공유 → 홈 화면에 추가 → 추가**를 선택합니다. 설치 후 홈 화면의 **한 줄 마당** 아이콘으로 게임을 엽니다.
+Android 휴대폰에서 게임을 열고 **앱 설치**를 누릅니다. 설치 창이 뜨면 **설치**를 선택하세요. 안내가 대신 뜨면 Chrome 메뉴에서 **홈 화면에 추가**를 선택합니다. 설치 후 홈 화면의 **한 줄 마당** 아이콘으로 게임을 엽니다.
 
 ## 8×8로 놀이하기
 

@@ -122,7 +122,6 @@ const Puzzle = (() => {
     board.hand[slot]=null;
     if (board.hand.every(p=>!p)) {
       board.hand=Array.from({length:3},()=>({shape:draw(board,shapes.length),color:colors[draw(board,colors.length)]}));
-      if (board.hand.every(p=>spot(board,p)<0)) board.hand[0].shape=3;
     }
     return {count,rows,cols,added,clearedCells,gained,streak:board.streak};
   }

@@ -1,6 +1,6 @@
 "use strict";
 
-// The album is independent from game saves: undo never duplicates image bytes.
+// The album is stored separately from the current game.
 const Portraits = (() => {
   const key=gameStorageKey("hanjul-album","1");
   const limit=Puzzle.shapes.length;

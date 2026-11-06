@@ -593,18 +593,6 @@ main {
   );
 }
 
-.cell.preview.hinted::after {
-  border-width: 3px;
-  border-color: #ffffff;
-  background: rgba(255, 212, 59, 0.38);
-  animation: hint-pulse 0.9s ease-in-out infinite alternate;
-}
-
-@keyframes hint-pulse {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
-}
-
 /* Highlight full row/col that WILL clear if placed here */
 .cell.will-clear {
   box-shadow: inset 0 0 0 2.5px #ffd43b, 0 0 10px rgba(255, 212, 59, 0.35);
@@ -1132,41 +1120,13 @@ main {
   filter: drop-shadow(0 10px 16px rgba(12, 22, 32, 0.38));
 }
 
-/* =====================================================================
-   GUIDE & CONTROLS PANEL (한 수 놓기 도구)
-   ===================================================================== */
-.controls-card {
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: 20px;
-  padding: 18px 20px;
-  box-shadow: 0 3px 0 #dfd6c5;
-}
-
-.controls-card h2 {
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #213544;
-}
-
-.instruction {
-  margin: 11px 0 15px;
-  font-size: 1.02rem;
-  font-weight: 600;
-  line-height: 1.5;
-  color: #2d4352;
-  min-height: 3em;
-  word-break: keep-all;
-}
-
-.action-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .primary {
@@ -1275,6 +1235,38 @@ dialog ol {
 
 dialog li { margin: 7px 0; }
 
+.game-result {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+  padding: 16px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: var(--sb-bg-top);
+  color: white;
+}
+
+.game-result h2 { font-size: 1.05rem; }
+#finalScore { font-size: 2.3rem; color: var(--sb-gold); }
+#finalDate { color: #d6e3ee; }
+#scoresTitle { display: flex; align-items: center; gap: 8px; }
+#scoresTitle .icon { color: var(--accent-green); }
+.scores-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.scores-table th, .scores-table td {
+  padding: 9px 5px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+.scores-table tr > :first-child { text-align: left; }
+.scores-table thead { color: var(--ink-muted); font-size: .9rem; }
+.scores-table tbody tr:first-child { background: #f8efda; }
+.scores-table tbody td:nth-child(2) { font-weight: 750; }
+#playAgain { margin-top: 18px; }
 
 /* =====================================================================
    GAME ADDITIONS
@@ -1295,8 +1287,6 @@ html {
 }
 
 #board { grid-template-rows: repeat(var(--n, 8), minmax(0, 1fr)); }
-
-.action-row .primary { margin: 0; }
 
 .hero-emblem {
   display: flex;
@@ -1468,8 +1458,7 @@ dialog p, dialog li { word-break: keep-all; }
 
 /* =====================================================================
    PHONE LAYOUT
-   The first screen holds the score, board, pieces and undo/hint. The menu
-   (photos, how to play, pause) sits below them and may need a scroll.
+   The first screen holds the score, board and pieces. The menu follows.
    ===================================================================== */
 @media (max-width: 780px) {
   .app-shell {
@@ -1504,7 +1493,7 @@ dialog p, dialog li { word-break: keep-all; }
 
   .top-nav {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -1618,8 +1607,8 @@ dialog p, dialog li { word-break: keep-all; }
     --frame-pad: 5px;
     order: 2;
     align-self: center;
-    width: max(272px, min(100%, 100vh - 369px));
-    width: max(272px, min(100%, 100svh - 369px));
+    width: max(272px, min(100%, 100vh - 250px));
+    width: max(272px, min(100%, 100svh - 250px));
     border-radius: 14px;
     box-shadow: 0 5px 0 var(--frame-lip), 0 8px 16px rgba(19, 32, 43, 0.16);
     margin-bottom: 5px;
@@ -1644,27 +1633,6 @@ dialog p, dialog li { word-break: keep-all; }
 
   .slot .shape { --unit: var(--slot-unit); }
   .shape.ghost { --unit: clamp(30px, 10.5vw, 44px); gap: 3px; }
-
-  .controls-card {
-    order: 5;
-    padding: 6px 8px 7px;
-    border-radius: 13px;
-    box-shadow: 0 2px 0 #dfd6c5;
-  }
-
-  .controls-card h2 { display: none; }
-
-  .instruction {
-    display: flex;
-    align-items: center;
-    min-height: 2.6em;
-    margin: 0 0 6px;
-    font-size: 0.88rem;
-    line-height: 1.3;
-  }
-
-  .action-row { gap: 8px; }
-  .action-row button { min-height: 46px; padding: 6px; }
 
   .rules-plaque { display: none; }
   #installBtn { order: 6; }

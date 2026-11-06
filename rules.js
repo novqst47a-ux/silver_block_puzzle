@@ -16,7 +16,7 @@ const Puzzle = (() => {
   }));
   const colors = ["a","b","c","d","e"];
   function fresh(n, seed) {
-    const board={n,cells:Array(n*n).fill(""),pieces:[],score:0,lines:0,seed,hand:[{shape:0,color:"b"},{shape:1,color:"a"},{shape:2,color:"c"}]};
+    const board={n,cells:Array(n*n).fill(""),pieces:[],score:0,lines:0,streak:0,seed,hand:[{shape:0,color:"b"},{shape:1,color:"a"},{shape:2,color:"c"}]};
     const layout=[[7,"d",n-5,1],[5,"c",n-5,n-3],[5,"b",n-4,n-4],
       [6,"a",n-3,0],[4,"e",n-1,0],[4,"b",n-2,2],[5,"d",n-2,n-3]];
     for(let col=5;col<n-3;col+=2)layout.push([0,"c",n-2,col]);
@@ -73,39 +73,58 @@ const Puzzle = (() => {
     board.seed=(Math.imul(board.seed,1664525)+1013904223)>>>0;
     return Math.floor(board.seed/4294967296*limit);
   }
-  function place(board,slot,r,c) {
-    const piece=board.hand[slot];
-    if (!fits(board,piece,r,c)) return null;
-    const n=board.n, added=stamp(board,piece,r,c), cleared=new Set();
-    let count=0;
+  function lineBonus(count) {
+    if (count<=0) return 0;
+    if (count===1) return 10;
+    if (count===2) return 30;
+    return 60+(count-3)*30;
+  }
+  function fullLines(cells,n) {
+    const rows=[], cols=[], cleared=new Set();
     for (let k=0;k<n;k++) {
       const row=Array.from({length:n},(_,i)=>k*n+i);
       const col=Array.from({length:n},(_,i)=>i*n+k);
-      for (const line of [row,col]) if (line.every(i=>board.cells[i])) {
-        count++;
-        for (const i of line) cleared.add(i);
-      }
+      if (row.every(i=>cells[i])) {rows.push(k);row.forEach(i=>cleared.add(i));}
+      if (col.every(i=>cells[i])) {cols.push(k);col.forEach(i=>cleared.add(i));}
     }
-    const hits=[];
+    return {rows,cols,cleared};
+  }
+  // Cells that placing the piece at (r, c) would clear, for the gold line preview.
+  function wouldClear(board,piece,r,c) {
+    if (!fits(board,piece,r,c)) return [];
+    const cells=board.cells.slice();
+    for (const [dy,dx] of shapes[piece.shape][1]) cells[(r+dy)*board.n+c+dx]=piece.color;
+    return [...fullLines(cells,board.n).cleared];
+  }
+  function place(board,slot,r,c) {
+    const piece=board.hand[slot];
+    if (!fits(board,piece,r,c)) return null;
+    const added=stamp(board,piece,r,c);
+    const {rows,cols,cleared}=fullLines(board.cells,board.n);
+    const count=rows.length+cols.length;
+    // Read colors before emptying the cells so the effect can replay the cleared tiles.
+    const clearedCells=[...cleared].map(index=>({index,color:board.cells[index]}));
     if (count) {
       for (const block of board.pieces) {
-        const hit=block.indices.find(i=>cleared.has(i));
-        if(hit===undefined)continue;
-        hits.push({shape:block.shape,index:cleared.has(block.anchor)?block.anchor:hit});
+        if(!block.indices.some(i=>cleared.has(i)))continue;
         block.indices=block.indices.filter(i=>!cleared.has(i));
         if(cleared.has(block.anchor))block.anchor=block.indices[0]??null;
       }
       board.pieces=board.pieces.filter(block=>block.indices.length);
       for (const i of cleared) board.cells[i]="";
     }
-    board.score+=added.length+10*count;
+    // Saves from before streaks have no counter, which reads as zero here.
+    board.streak=count?(board.streak||0)+1:0;
+    const streakBonus=board.streak>=2?(board.streak-1)*5:0;
+    const gained=added.length+lineBonus(count)+streakBonus;
+    board.score+=gained;
     board.lines+=count;
     board.hand[slot]=null;
     if (board.hand.every(p=>!p)) {
       board.hand=Array.from({length:3},()=>({shape:draw(board,shapes.length),color:colors[draw(board,colors.length)]}));
       if (board.hand.every(p=>spot(board,p)<0)) board.hand[0].shape=3;
     }
-    return {count,added,cleared:[...cleared],hits};
+    return {count,rows,cols,added,clearedCells,gained,streak:board.streak};
   }
-  return {shapes,shapeSizes,colors,fresh,fits,placementAnchor,spot,place};
+  return {shapes,shapeSizes,colors,fresh,fits,placementAnchor,spot,wouldClear,place};
 })();

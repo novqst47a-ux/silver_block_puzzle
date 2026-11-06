@@ -132,7 +132,7 @@ const Portraits = (() => {
     finally{busy=false;picker.disabled=false;const current=document.getElementById("photoFiles");if(current)current.disabled=false;}
   }
   function openAlbum(message=""){
-    dialog("사진 꾸미기",`<p>사진 세 장만 담아도 여덟 가지 조각이 나눠 써요. 얼굴은 조각마다 한 칸에만 보여요.</p>
+    dialog("사진 꾸미기",`<p>사진 세 장만 담아도 여덟 가지 조각이 나눠 써요. 줄을 지우면 담은 사진 중 하나가 크게 나와 함께 춤춰요.</p>
       <div class="album-heading"><h3>내 사진</h3><span id="albumCount"></span></div>
       <div id="albumGrid"></div>
       <label class="fileButton">＋ 사진 담기<input id="photoFiles" type="file" accept="image/*" multiple></label>
@@ -208,34 +208,19 @@ const Portraits = (() => {
       }catch{saveError();}
     };
   }
-  function celebrate(result,n){
-    const layer=$("celebration");
-    layer.replaceChildren();
-    const title=document.createElement("strong");
-    title.textContent=result.count===1?"한 줄 완성!":result.count+"줄을 한꺼번에!";
-    title.className="praise";layer.append(title);
-    const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
-    result.hits.forEach(({shape,index},k)=>{
-      const p=forShape(shape);
-      if(!p)return;
-      const pop=image(p.thumb);pop.className="pop-photo";
-      const x=(index%n+.5)/n*100,y=(Math.floor(index/n)+.5)/n*100;
-      pop.style.left=x+"%";pop.style.top=y+"%";
-      // Direct edge portraits inward so the enlarged face stays on the board.
-      const drift=x<20?30:x>80?-30:k%2?12:-12;
-      pop.style.setProperty("--drift",drift+"px");
-      pop.style.setProperty("--rise",y<23?"24px":"-38px");
-      layer.append(pop);
-    });
-    if(!reduced){
-      for(let i=0;i<12;i++){
-        const dot=document.createElement("i"),start=result.cleared[i%result.cleared.length];
-        dot.className="petal";dot.style.left=((start%n+.5)/n*100)+"%";dot.style.top=((Math.floor(start/n)+.5)/n*100)+"%";
-        dot.style.setProperty("--dx",(Math.cos(i*2.4)*38)+"px");dot.style.setProperty("--dy",(-16-Math.abs(Math.sin(i))*36)+"px");
-        dot.style.background="var(--"+Puzzle.colors[i%5]+")";layer.append(dot);
-      }
-    }
-    setTimeout(()=>{if(title.isConnected)layer.replaceChildren();},1250);
+  let lastHero=null;
+  // One random album photo for the line-clear hero. It is cropped again from the
+  // larger source because the small board thumbnail blurs at this size.
+  function heroFace(){
+    const photos=album.photos;
+    if(!photos.length)return null;
+    const others=photos.filter(p=>p.id!==lastHero);
+    const pool=others.length?others:photos;
+    const photo=pool[Math.floor(Math.random()*pool.length)];
+    lastHero=photo.id;
+    const face=canvas(384),source=image(photo.source);
+    source.decode().then(()=>drawCrop(face,source,photo.view)).catch(()=>{});
+    return face;
   }
-  return {decorate,openAlbum,celebrate};
+  return {decorate,openAlbum,heroFace};
 })();

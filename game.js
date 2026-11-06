@@ -243,6 +243,18 @@ function targetForCell(index){
   const b=board();
   return Puzzle.placementAnchor(b,b.hand[selected],Math.floor(index/b.n),index%b.n);
 }
+function positionGhost(index,x,y){
+  if (index<0) {
+    if (ghost.parentNode!==document.body) document.body.append(ghost);
+    ghost.style.setProperty("--pointer-x",x+"px");
+    ghost.style.setProperty("--pointer-y",y+"px");
+    return;
+  }
+  const n=board().n;
+  ghost.style.gridRowStart=Math.floor(index/n)+1;
+  ghost.style.gridColumnStart=index%n+1;
+  if (ghost.parentNode!==boardEl) boardEl.append(ghost);
+}
 function cancelGesture(){
   if (gesture?.target.hasPointerCapture(gesture.id)) gesture.target.releasePointerCapture(gesture.id);
   gesture=null;ghost?.remove();ghost=null;
@@ -264,11 +276,12 @@ document.addEventListener("pointermove",ev=>{
   const g=gesture;if (!g||g.id!==ev.pointerId) return;
   if (g.type==="tray"&&!g.dragging) {
     if(Math.hypot(ev.clientX-g.x,ev.clientY-g.y)<8)return;
-    g.dragging=true;ghost=shapeView(board().hand[selected]);ghost.classList.add("ghost");document.body.append(ghost);
+    g.dragging=true;ghost=shapeView(board().hand[selected]);ghost.classList.add("ghost");
     say("점선을 보고 손을 떼세요. 금빛 테두리가 비치는 줄은 놓자마자 지워져요!");
   }
-  if (ghost) {ghost.style.left=ev.clientX+"px";ghost.style.top=ev.clientY+"px";}
-  preview(atPoint(ev.clientX,ev.clientY));
+  const index=atPoint(ev.clientX,ev.clientY);
+  if (ghost) positionGhost(index,ev.clientX,ev.clientY);
+  preview(index);
 });
 document.addEventListener("pointerup",ev=>{
   const g=gesture;if (!g||g.id!==ev.pointerId)return;

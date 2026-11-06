@@ -1113,11 +1113,27 @@ main {
 .shape.ghost {
   --unit: 38px;
   position: fixed;
+  left: var(--pointer-x);
+  top: var(--pointer-y);
   pointer-events: none;
-  transform: translate(-50%, calc(-100% - 22px));
+  transform: translate(-50%, -50%);
   z-index: 30;
   opacity: 0.95;
   filter: drop-shadow(0 10px 16px rgba(12, 22, 32, 0.38));
+}
+
+/* The dragged tiles occupy the same grid tracks as the placement outline. */
+#board > .ghost {
+  position: absolute;
+  inset: 0;
+  grid-row-end: span var(--h);
+  grid-column-end: span var(--w);
+  grid-template-columns: repeat(var(--w), 1fr);
+  grid-template-rows: repeat(var(--h), 1fr);
+  gap: inherit;
+  transform: none;
+  filter: none;
+  opacity: 0.55;
 }
 
 .sr-only {

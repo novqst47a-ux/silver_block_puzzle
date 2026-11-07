@@ -1,8 +1,10 @@
 const prefix="hanjul:"+self.registration.scope+":";
-const cacheName=prefix+"13";
+const cacheName=prefix+"17";
 const files=["./","./index.html","./style.css","./storage.js","./rules.js","./portraits.js","./effects.js","./game.js","./install.js",
   "./manifest.webmanifest","./icons/icon-192.png?v=2","./icons/icon-512.png?v=2","./icons/icon-maskable-512.png"];
-self.addEventListener("install",e=>e.waitUntil(caches.open(cacheName).then(c=>c.addAll(files))));
+self.addEventListener("install",e=>e.waitUntil(caches.open(cacheName).then(c=>
+  c.addAll(files.map(path=>new Request(new URL(path,self.registration.scope),{cache:"reload"})))
+)));
 self.addEventListener("activate",e=>e.waitUntil((async()=>{
   for(const k of await caches.keys()) if(k.startsWith(prefix)&&k!==cacheName)await caches.delete(k);
   await self.clients.claim();

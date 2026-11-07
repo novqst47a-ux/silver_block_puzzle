@@ -3,7 +3,7 @@
 // The album is stored separately from the current game.
 const Portraits = (() => {
   const key=gameStorageKey("hanjul-album","1");
-  const limit=Puzzle.shapes.length;
+  const limit=Puzzle.baseShapes.length;
   const defaults=()=>({photos:[],assignments:{}});
   const center={x:50,y:50,zoom:1};
   function read(){
@@ -24,7 +24,8 @@ const Portraits = (() => {
   function forShape(shape){
     const photos=album.photos;
     if(!photos.length)return null;
-    return photos.find(p=>p.id===album.assignments[shape]) || photos[shape%photos.length];
+    const photoShape=Puzzle.shapes[shape][2]??shape;
+    return photos.find(p=>p.id===album.assignments[photoShape]) || photos[photoShape%photos.length];
   }
   function image(src){
     const el=new Image();
@@ -132,7 +133,7 @@ const Portraits = (() => {
     finally{busy=false;picker.disabled=false;const current=document.getElementById("photoFiles");if(current)current.disabled=false;}
   }
   function openAlbum(message=""){
-    dialog("사진 꾸미기",`<p>사진 세 장만 담아도 여덟 가지 조각이 나눠 써요. 줄을 지우면 담은 사진 중 하나가 크게 나와 함께 춤춰요.</p>
+    dialog("사진 꾸미기",`<p>줄을 지우면 담은 사진 중 하나가 크게 나와 함께 춤춰요.</p>
       <div class="album-heading"><h3>내 사진</h3><span id="albumCount"></span></div>
       <div id="albumGrid"></div>
       <label class="fileButton">＋ 사진 담기<input id="photoFiles" type="file" accept="image/*" multiple></label>
@@ -149,7 +150,7 @@ const Portraits = (() => {
       btn.title="사진 "+(i+1)+" 위치 맞추기 또는 삭제";btn.prepend(image(p.thumb));$("albumGrid").append(btn);
     });
     $("shapeChoices").hidden=!photos.length;
-    Puzzle.shapes.forEach(([label],shape)=>{
+    Puzzle.baseShapes.forEach(([label],shape)=>{
       const row=document.createElement("label");row.className="assignment";
       const art=shapeView({shape,color:Puzzle.colors[shape%Puzzle.colors.length]});
       const name=document.createElement("span");name.textContent=label;

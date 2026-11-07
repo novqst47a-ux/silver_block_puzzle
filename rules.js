@@ -1,6 +1,7 @@
 "use strict";
 const Puzzle = (() => {
-  const shapes = [
+  // Base shape indices are also the keys used in saved games and photo albums.
+  const baseShapes = [
     ["가로 두 칸", [[0,0],[0,1]]],
     ["작은 니은", [[0,0],[1,0],[1,1]]],
     ["세로 세 칸", [[0,0],[1,0],[2,0]]],
@@ -10,10 +11,30 @@ const Puzzle = (() => {
     ["작은 네모", [[0,0],[0,1],[1,0],[1,1]]],
     ["기역 모양", [[0,0],[0,1],[1,1]]]
   ];
+  function square(side) {
+    return Array.from({length:side*side},(_,i)=>[Math.floor(i/side),i%side]);
+  }
+  // Each larger shape names the base shape whose photo it uses.
+  const shapes = [
+    ...baseShapes,
+    ["3×3 네모", square(3), 6],
+    ["4×4 네모", square(4), 6],
+    ["2×3 니은", [[0,0],[1,0],[2,0],[2,1]], 1],
+    ["2×4 니은", [[0,0],[1,0],[2,0],[3,0],[3,1]], 1],
+    ["2×3 기역", [[0,0],[0,1],[1,1],[2,1]], 7],
+    ["2×4 기역", [[0,0],[0,1],[1,1],[2,1],[3,1]], 7]
+  ];
   const shapeSizes = shapes.map(([,cells]) => ({
     width: 1 + Math.max(...cells.map(([,dx]) => dx)),
     height: 1 + Math.max(...cells.map(([dy]) => dy))
   }));
+  // Choose an occupied cell nearest the shape's centroid. On a tie use the later cell.
+  const shapeAnchors=shapes.map(([,cells])=>{
+    const sumRow=cells.reduce((sum,[r])=>sum+r,0);
+    const sumCol=cells.reduce((sum,[,c])=>sum+c,0);
+    const distance=([r,c])=>(r*cells.length-sumRow)**2+(c*cells.length-sumCol)**2;
+    return cells.reduce((best,cell)=>distance(cell)<=distance(best)?cell:best);
+  });
   const colors = ["a","b","c","d","e"];
   function fresh(n, seed) {
     const board={n,cells:Array(n*n).fill(""),pieces:[],score:0,lines:0,streak:0,seed,hand:[{shape:0,color:"b"},{shape:1,color:"a"},{shape:2,color:"c"}]};
@@ -28,7 +49,8 @@ const Puzzle = (() => {
     for(const i of indices)board.cells[i]=piece.color;
     // Older saves have colors but no piece boundaries.
     board.pieces ??= [];
-    board.pieces.push({shape:piece.shape,anchor:indices[0],indices});
+    const [dy,dx]=shapeAnchors[piece.shape];
+    board.pieces.push({shape:piece.shape,anchor:(r+dy)*board.n+c+dx,indices});
     return indices;
   }
   function fits(board,piece,r,c) {
@@ -37,34 +59,6 @@ const Puzzle = (() => {
       return y>=0 && x>=0 && y<board.n && x<board.n && !board.cells[y*board.n+x];
     });
   }
-  // Aim coordinates use cell centers: (0, 0) is the center of the first cell.
-  function placementAnchor(board,piece,aimRow,aimCol) {
-    if (!piece) return -1;
-    const {height,width}=shapeSizes[piece.shape];
-    const lastRow=board.n-height, lastCol=board.n-width;
-    const row=Math.max(0,Math.min(lastRow,Math.round(aimRow)));
-    const col=Math.max(0,Math.min(lastCol,Math.round(aimCol)));
-    const anchor=row*board.n+col;
-    if (fits(board,piece,row,col)) return anchor;
-
-    // A blocked anchor may shift one cell in either direction. Keep an invalid
-    // preview at the original in-bounds anchor if all of its neighbors are blocked.
-    let best=anchor, bestDistance=Infinity, bestCoversTarget=false;
-    const targetRow=Math.round(aimRow), targetCol=Math.round(aimCol);
-    for (let r=Math.max(0,row-1);r<=Math.min(lastRow,row+1);r++) {
-      for (let c=Math.max(0,col-1);c<=Math.min(lastCol,col+1);c++) {
-        const distance=(r-aimRow)**2+(c-aimCol)**2;
-        if (distance>bestDistance || !fits(board,piece,r,c)) continue;
-        const coversTarget=shapes[piece.shape][1].some(([dy,dx]) => r+dy===targetRow && c+dx===targetCol);
-        if (distance<bestDistance || (coversTarget && !bestCoversTarget)) {
-          best=r*board.n+c;
-          bestDistance=distance;
-          bestCoversTarget=coversTarget;
-        }
-      }
-    }
-    return best;
-  }
   function spot(board,piece) {
     for (let i=0;i<board.cells.length;i++) if (fits(board,piece,Math.floor(i/board.n),i%board.n)) return i;
     return -1;
@@ -72,6 +66,19 @@ const Puzzle = (() => {
   function draw(board, limit) {
     board.seed=(Math.imul(board.seed,1664525)+1013904223)>>>0;
     return Math.floor(board.seed/4294967296*limit);
+  }
+  function dealHand(board) {
+    const emptyCount=board.cells.filter(cell=>!cell).length;
+    const candidates=[];
+    shapes.forEach(([,cells],shape)=>{
+      if (shape<baseShapes.length || (cells.length<=emptyCount && spot(board,{shape})>=0)) {
+        candidates.push(shape);
+      }
+    });
+    return Array.from({length:3},()=>({
+      shape:candidates[draw(board,candidates.length)],
+      color:colors[draw(board,colors.length)]
+    }));
   }
   function lineBonus(count) {
     if (count<=0) return 0;
@@ -121,9 +128,9 @@ const Puzzle = (() => {
     board.lines+=count;
     board.hand[slot]=null;
     if (board.hand.every(p=>!p)) {
-      board.hand=Array.from({length:3},()=>({shape:draw(board,shapes.length),color:colors[draw(board,colors.length)]}));
+      board.hand=dealHand(board);
     }
     return {count,rows,cols,added,clearedCells,gained,streak:board.streak};
   }
-  return {shapes,shapeSizes,colors,fresh,fits,placementAnchor,spot,wouldClear,place};
+  return {baseShapes,shapes,shapeSizes,shapeAnchors,colors,fresh,fits,spot,wouldClear,place};
 })();

@@ -473,17 +473,20 @@ main {
 }
 
 #board {
+  --board-gap: 3px;
   display: grid;
   grid-template-columns: repeat(var(--n, 8), minmax(0, 1fr));
   aspect-ratio: 1;
   background: var(--board-bg);
   border-radius: 11px;
   padding: 3px;
-  gap: 3px;
+  gap: var(--board-gap);
+  overflow: clip;
   touch-action: pan-y;
   position: relative;
 }
 
+#board.aiming { touch-action: none; user-select: none; }
 .boardrow { display: contents; }
 
 .cell {
@@ -564,13 +567,6 @@ main {
   z-index: 1;
 }
 
-.anchor:has(.face)::after {
-  top: 16%;
-  left: 16%;
-  width: 20%;
-  height: 20%;
-}
-
 /* Placement Preview & Line-Completion Anticipation */
 .cell.preview::after {
   content: "";
@@ -586,12 +582,55 @@ main {
 .cell.preview.invalid::after {
   border-style: solid;
   border-color: #ff8a80;
+  background: rgba(220, 38, 38, 0.16);
+}
+
+.cell.preview.invalid.filled::after {
   background: repeating-linear-gradient(
     45deg,
     rgba(220, 38, 38, 0.42) 0 4px,
     rgba(220, 38, 38, 0.16) 4px 8px
   );
 }
+
+#parkToast {
+  position: absolute;
+  z-index: 8;
+  top: calc(var(--frame-pad) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  padding: 9px 14px;
+  border: 2px solid #ffec58;
+  border-radius: 12px;
+  background: #182430;
+  color: #fff;
+  box-shadow: 0 4px 12px #10192366;
+  pointer-events: none;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+#parkToast.at-bottom { top: auto; bottom: calc(var(--frame-pad) + 10px); }
+#parkToast::before {
+  content: "!";
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ffec58;
+  color: #182430;
+  font-size: 21px;
+  font-weight: 900;
+}
+#parkToast strong { font-size: 1.05rem; }
+#parkToast span { grid-column: 2; font-size: 0.9rem; }
 
 /* Highlight full row/col that WILL clear if placed here */
 .cell.will-clear {
@@ -1054,6 +1093,7 @@ main {
 }
 
 #tray {
+  --slot-unit: 26px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -1079,6 +1119,15 @@ main {
   transform: translateY(-2px);
 }
 
+.slot.holding .shape { visibility: hidden; }
+.slot.holding::after {
+  content: "다시 잡아\a옮기세요";
+  position: absolute;
+  white-space: pre;
+  line-height: 1.35;
+  color: #174632;
+}
+
 .slot:disabled {
   background: #ebe6da;
   border-color: #d6cfc0;
@@ -1101,6 +1150,10 @@ main {
   pointer-events: none;
 }
 
+.slot .shape {
+  --unit: calc(var(--slot-unit) * 3 / max(3, var(--w), var(--h)));
+}
+
 .shape i {
   position: relative;
   display: block;
@@ -1110,30 +1163,53 @@ main {
   border-radius: 6px;
 }
 
-.shape.ghost {
-  --unit: 38px;
+.drag-piece {
   position: fixed;
-  left: var(--pointer-x);
-  top: var(--pointer-y);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
   z-index: 30;
-  opacity: 0.95;
-  filter: drop-shadow(0 10px 16px rgba(12, 22, 32, 0.38));
+  opacity: 0.64;
+  filter: drop-shadow(0 3px 4px rgba(12, 22, 32, 0.4));
 }
 
-/* The dragged tiles occupy the same grid tracks as the placement outline. */
-#board > .ghost {
+.drag-piece.lifted-copy {
+  transform: scale(0.65);
+  transform-origin: center bottom;
+}
+
+/* Size each tile from the anchor cell so a parked piece follows board resizes. */
+.parked-piece {
   position: absolute;
-  inset: 0;
-  grid-row-end: span var(--h);
-  grid-column-end: span var(--w);
-  grid-template-columns: repeat(var(--w), 1fr);
-  grid-template-rows: repeat(var(--h), 1fr);
-  gap: inherit;
-  transform: none;
-  filter: none;
+  top: calc(var(--start-row) * (100% + var(--board-gap)));
+  left: calc(var(--start-col) * (100% + var(--board-gap)));
+  width: 100%;
+  height: 100%;
+  grid-template-columns: repeat(var(--w), 100%);
+  grid-template-rows: repeat(var(--h), 100%);
+  gap: var(--board-gap);
+  z-index: 3;
   opacity: 0.55;
+}
+.parked-piece i { pointer-events: auto; cursor: grab; }
+.parked-piece.waiting {
+  transform: translate(var(--nudge-x), var(--nudge-y));
+  opacity: 1;
+  filter: drop-shadow(0 3px 3px #0d151deb);
+}
+.waiting .minicell {
+  background: repeating-linear-gradient(135deg, #fff04a 0 9px, #73581c 9px 14px);
+  border: 2px solid #302a11;
+  box-shadow: 0 0 0 1.5px #fffadc, inset 0 0 0 1px #ffe94c;
+}
+.waiting .face { visibility: hidden; }
+.waiting .anchor::after {
+  content: "!";
+  display: grid;
+  place-items: center;
+  width: 62%;
+  height: 62%;
+  background: #19212b;
+  color: #fff;
+  border: 1px solid #fff9c5;
+  font: 900 clamp(14px, 4vw, 22px)/1 system-ui, sans-serif;
 }
 
 .sr-only {
@@ -1646,9 +1722,6 @@ dialog p, dialog li { word-break: keep-all; }
     padding: 0;
     border-radius: 13px;
   }
-
-  .slot .shape { --unit: var(--slot-unit); }
-  .shape.ghost { --unit: clamp(30px, 10.5vw, 44px); gap: 3px; }
 
   .rules-plaque { display: none; }
   #installBtn { order: 6; }

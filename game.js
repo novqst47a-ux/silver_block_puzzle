@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const boardEl=$("board"), tray=$("tray"), panel=$("panel");
 const boardFrame=$("boardFrame");
+const parkToast=$("parkToast");
 const scoresDialog=$("scoresDialog"), recordLimit=5;
 const storageKey=gameStorageKey("hanjul-madang","v1");
 const initialSeed=(Math.random()*4294967296)>>>0;
@@ -42,7 +43,9 @@ function restore() {
     return newState();
   }
 }
-let state=restore(), selected=null, focusIndex=0, gesture=null, ghost=null;
+let state=restore(), selected=null, focusIndex=0, gesture=null, parked=null;
+let previewIndex=-1;
+let toastTimer=0;
 let displayedScore=0, scoreAnim=0, deltaTimer=0;
 const session=()=>state.sessions[state.size];
 const board=()=>session().board;
@@ -52,6 +55,7 @@ function save() {
 }
 const say=msg=>{$("instruction").textContent=msg;};
 const defaultHelp="조각을 누르고 빈칸을 누르세요. 끌어서 점선 위치에 놓아도 좋아요.";
+const parkedHelp="여기에는 놓을 수 없어요. 줄무늬 조각을 다시 잡아 옮기거나 놓을 칸을 눌러 주세요.";
 const reducedMotion=()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
 const points=new Intl.NumberFormat(document.documentElement.lang).format;
 const recordDate=new Intl.DateTimeFormat(document.documentElement.lang,{year:"numeric",month:"2-digit",day:"2-digit"}).format;
@@ -122,10 +126,11 @@ function shapeView(piece) {
   const {width,height}=Puzzle.shapeSizes[piece.shape];
   shape.style.setProperty("--w",width);
   shape.style.setProperty("--h",height);
-  coords.forEach(([r,c],idx)=>{
+  const [anchorRow,anchorCol]=Puzzle.shapeAnchors[piece.shape];
+  coords.forEach(([r,c])=>{
     const wrap=document.createElement("i");wrap.style.gridArea=(r+1)+"/"+(c+1);
-    const tile=document.createElement("b");tile.className="minicell"+(idx===0?" anchor":"");
-    if(idx===0)Portraits.decorate(tile,piece.shape);
+    const tile=document.createElement("b");tile.className="minicell";
+    if(r===anchorRow && c===anchorCol){tile.classList.add("anchor");Portraits.decorate(tile,piece.shape);}
     wrap.append(tile);shape.append(wrap);
   });
   return shape;
@@ -144,18 +149,68 @@ function renderTray(){
 }
 function showSelection(){
   tray.querySelectorAll(".slot").forEach((b,i)=>b.setAttribute("aria-pressed",String(i===selected)));
+  boardEl.classList.toggle("aiming",selected!==null);
+}
+const cellAt=index=>boardEl.querySelector('[data-index="'+index+'"]');
+function placementOrigin(index){
+  const b=board(),[dy,dx]=Puzzle.shapeAnchors[b.hand[selected].shape];
+  return [Math.floor(index/b.n)-dy,index%b.n-dx];
 }
 function preview(index){
+  if (previewIndex===index) return;
+  previewIndex=index;
   boardEl.querySelectorAll(".preview,.will-clear").forEach(el=>el.classList.remove("preview","invalid","will-clear"));
   if (index<0||selected===null) return;
   const b=board(),p=b.hand[selected];if (!p) return;
-  const r=Math.floor(index/b.n),c=index%b.n,valid=Puzzle.fits(b,p,r,c);
-  const at=i=>boardEl.querySelector('[data-index="'+i+'"]');
+  const [r,c]=placementOrigin(index),valid=Puzzle.fits(b,p,r,c);
   for (const [dy,dx] of Puzzle.shapes[p.shape][1]) if (finiteSpot(r+dy,c+dx)) {
-    const cell=at((r+dy)*b.n+c+dx);
+    const cell=cellAt((r+dy)*b.n+c+dx);
     cell.classList.add("preview");cell.classList.toggle("invalid",!valid);
   }
-  if (valid) for (const i of Puzzle.wouldClear(b,p,r,c)) at(i).classList.add("will-clear");
+  if (valid) for (const i of Puzzle.wouldClear(b,p,r,c)) cellAt(i).classList.add("will-clear");
+}
+function hideParkToast(){
+  clearTimeout(toastTimer);parkToast.hidden=true;
+}
+function clearParked(){
+  hideParkToast();
+  if (!parked) return;
+  parked.shape.remove();
+  parked.slot.classList.remove("holding");
+  parked=null;
+}
+function positionParked(index,waiting=true){
+  if (!parked) return;
+  const {shape}=parked;
+  shape.hidden=index<0;
+  if (index<0) return;
+  const b=board(), {width,height}=Puzzle.shapeSizes[b.hand[selected].shape];
+  let [row,col]=placementOrigin(index);
+  if (waiting) {
+    // Keep the whole warning piece within reach, including at a clipped board edge.
+    row=Math.max(0,Math.min(b.n-height,row));
+    col=Math.max(0,Math.min(b.n-width,col));
+    shape.style.setProperty("--nudge-x",col+width/2<b.n/2?"18%":"-18%");
+    shape.style.setProperty("--nudge-y",row+height/2<b.n/2?"16%":"-16%");
+  }
+  shape.classList.toggle("waiting",waiting);
+  shape.style.setProperty("--start-row",row-Math.floor(index/b.n));
+  shape.style.setProperty("--start-col",col-index%b.n);
+  const cell=cellAt(index);
+  if (shape.parentNode!==cell) cell.append(shape);
+}
+function park(index){
+  clearParked();
+  const shape=shapeView(board().hand[selected]), slot=tray.children[selected];
+  shape.classList.add("parked-piece");
+  slot.classList.add("holding");
+  parked={index,shape,slot};
+  positionParked(index);
+  preview(index);
+  parkToast.classList.toggle("at-bottom",Math.floor(index/board().n)<board().n/2);
+  parkToast.hidden=false;
+  toastTimer=setTimeout(hideParkToast,4200);
+  say(parkedHelp);
 }
 function showGoal(score,best,isRecord){
   let text,fill;
@@ -204,7 +259,9 @@ function updateScoreboard(gained=0){
   }
 }
 function render(msg=defaultHelp,{added=[],gained=0}={}){
-  selected=null;
+  cancelGesture();clearParked();
+  selected=null;previewIndex=-1;
+  boardEl.classList.remove("aiming");
   renderBoard(added);renderTray();updateScoreboard(gained);
   $("boardTitle").textContent=state.size+"×"+state.size+" 놀이판";
   document.querySelectorAll("[data-size]").forEach(btn=>btn.setAttribute("aria-pressed",String(+btn.dataset.size===state.size)));
@@ -214,15 +271,15 @@ function render(msg=defaultHelp,{added=[],gained=0}={}){
 }
 function select(idx){
   if (session().finishedAt || !board().hand[idx]) return;
+  clearParked();
   selected=idx;showSelection();preview(-1);
-  say(nameOf(board().hand[idx])+" 조각이에요. 흰 점이 놓일 빈칸을 눌러 주세요.");
+  say(nameOf(board().hand[idx])+" 조각이에요. 가운데 흰 점이 놓일 칸을 눌러 주세요.");
 }
 function commit(index){
   if (session().finishedAt || selected===null || index<0) return;
-  const b=board(),r=Math.floor(index/b.n),c=index%b.n, g=session();
+  const b=board(),[r,c]=placementOrigin(index),g=session();
   if (!Puzzle.fits(b,b.hand[selected],r,c)) {
-    preview(index);
-    say("이곳에는 조각이 들어가지 않아요. 다른 자리를 골라 보세요.");return;
+    park(index);return;
   }
   const result=Puzzle.place(b,selected,r,c);
   const ended=finishIfStuck();
@@ -232,36 +289,27 @@ function commit(index){
   if(ended){Effects.clear();showScores();}
   else if(result.count)Effects.playClear(result,b.n,{record:g.best>0&&b.score>g.best,face:Portraits.heroFace()});
 }
-function atPoint(x,y){
-  const frame=boardFrame.getBoundingClientRect();
-  if (x<frame.left || x>=frame.right || y<frame.top || y>=frame.bottom) return -1;
-  const rect=boardEl.getBoundingClientRect(),b=board();
-  const row=(y-rect.top)*b.n/rect.height-0.5, col=(x-rect.left)*b.n/rect.width-0.5;
-  return Puzzle.placementAnchor(b,b.hand[selected],row,col);
+function gridMetrics(){
+  const n=board().n, first=cellAt(0).getBoundingClientRect();
+  const last=cellAt(n*n-1).getBoundingClientRect();
+  return {first,stepX:(last.left-first.left)/(n-1),stepY:(last.top-first.top)/(n-1)};
 }
-function targetForCell(index){
-  const b=board();
-  return Puzzle.placementAnchor(b,b.hand[selected],Math.floor(index/b.n),index%b.n);
-}
-function positionGhost(index,x,y){
-  if (index<0) {
-    if (ghost.parentNode!==document.body) document.body.append(ghost);
-    ghost.style.setProperty("--pointer-x",x+"px");
-    ghost.style.setProperty("--pointer-y",y+"px");
-    return;
-  }
-  const n=board().n;
-  ghost.style.gridRowStart=Math.floor(index/n)+1;
-  ghost.style.gridColumnStart=index%n+1;
-  if (ghost.parentNode!==boardEl) boardEl.append(ghost);
+function indexAt(x,y,{first,stepX,stepY}){
+  const col=Math.round((x-first.left-first.width/2)/stepX);
+  const row=Math.round((y-first.top-first.height/2)/stepY);
+  return finiteSpot(row,col)?row*board().n+col:-1;
 }
 function cancelGesture(){
-  if (gesture?.target.hasPointerCapture(gesture.id)) gesture.target.releasePointerCapture(gesture.id);
-  gesture=null;ghost?.remove();ghost=null;
+  const g=gesture;
+  if (!g) return;
+  gesture=null;
+  if (g.target.hasPointerCapture(g.id)) g.target.releasePointerCapture(g.id);
+  g.ghost?.remove();
+  if (parked) positionParked(parked.index);
 }
 function start(ev,target,type){
   if (gesture||!ev.isPrimary||ev.button!==0) return false;
-  gesture={type,id:ev.pointerId,target,x:ev.clientX,y:ev.clientY,dragging:false};
+  gesture={type,id:ev.pointerId,target,x:ev.clientX,y:ev.clientY,ghost:null};
   target.setPointerCapture(ev.pointerId);return true;
 }
 tray.addEventListener("pointerdown",ev=>{
@@ -270,29 +318,82 @@ tray.addEventListener("pointerdown",ev=>{
 });
 boardFrame.addEventListener("pointerdown",ev=>{
   if (selected===null) return;
-  if (start(ev,boardFrame,"board"))preview(atPoint(ev.clientX,ev.clientY));
+  const regrab=parked && ev.target.closest(".parked-piece");
+  if (!start(ev,boardFrame,regrab?"parked":"board")) return;
+  hideParkToast();
+  if (regrab) {
+    const rect=parked.shape.getBoundingClientRect();
+    gesture.grabX=ev.clientX-rect.left;
+    gesture.grabY=ev.clientY-rect.top;
+  } else {
+    if (parked) parked.shape.hidden=true;
+    preview(indexAt(ev.clientX,ev.clientY,gridMetrics()));
+  }
 });
-document.addEventListener("pointermove",ev=>{
-  const g=gesture;if (!g||g.id!==ev.pointerId) return;
-  if (g.type==="tray"&&!g.dragging) {
-    if(Math.hypot(ev.clientX-g.x,ev.clientY-g.y)<8)return;
-    g.dragging=true;ghost=shapeView(board().hand[selected]);ghost.classList.add("ghost");
+function gestureIndex(g,ev){
+  const grid=gridMetrics(), {first,stepX,stepY}=grid;
+  const x=ev.clientX,y=ev.clientY;
+  if (!g.ghost && Math.hypot(x-g.x,y-g.y)<8) {
+    if (g.type==="parked") return parked.index;
+    return g.type==="board"?indexAt(x,y,grid):-1;
+  }
+  const piece=board().hand[selected];
+  if (!g.ghost) {
+    g.ghost=shapeView(piece);
+    g.ghost.classList.add("drag-piece");
+    document.body.append(g.ghost);
+    if (parked) parked.shape.hidden=true;
     say("점선을 보고 손을 떼세요. 금빛 테두리가 비치는 줄은 놓자마자 지워져요!");
   }
-  const index=atPoint(ev.clientX,ev.clientY);
-  if (ghost) positionGhost(index,ev.clientX,ev.clientY);
-  preview(index);
+  const {width,height}=Puzzle.shapeSizes[piece.shape];
+  const [anchorRow,anchorCol]=Puzzle.shapeAnchors[piece.shape];
+  const anchorX=first.width/2+anchorCol*stepX, anchorY=first.height/2+anchorRow*stepY;
+  const w=first.width+(width-1)*stepX, h=first.height+(height-1)*stepY;
+  const touch=ev.pointerType==="touch";
+  const lift=Math.max(18,stepY*0.5);
+  let left=x-anchorX,top=y-anchorY;
+  // On the board, keep the originally grabbed tile under the same part of the finger.
+  if (g.type==="parked") {
+    left=x-g.grabX;top=y-g.grabY;
+  } else if (touch && g.type==="tray") {
+    left=x-w/2;top=y-h-lift;
+  }
+  // A small lifted copy keeps a direct board drag visible above the thumb.
+  const liftedCopy=touch && g.type!=="tray";
+  const style=g.ghost.style;
+  style.setProperty("--unit",first.width+"px");
+  style.gap=(stepY-first.height)+"px "+(stepX-first.width)+"px";
+  style.left=(liftedCopy?x-w/2:left)+"px";
+  style.top=(liftedCopy?y-h-lift:top)+"px";
+  g.ghost.classList.toggle("lifted-copy",liftedCopy);
+  const index=indexAt(left+anchorX,top+anchorY,grid);
+  if (liftedCopy && g.type==="parked") positionParked(index,false);
+  return index;
+}
+document.addEventListener("pointermove",ev=>{
+  const g=gesture;if (!g||g.id!==ev.pointerId) return;
+  if (!ev.buttons) {interrupt();return;}
+  preview(gestureIndex(g,ev));
 });
 document.addEventListener("pointerup",ev=>{
   const g=gesture;if (!g||g.id!==ev.pointerId)return;
-  const idx=atPoint(ev.clientX,ev.clientY);
+  let idx=gestureIndex(g,ev);
+  // A tap on any tile of the waiting piece still names that exact board cell.
+  if (g.type==="parked"&&!g.ghost) idx=indexAt(ev.clientX,ev.clientY,gridMetrics());
   cancelGesture();
-  if (g.type==="tray"&&!g.dragging) return;
-  if(idx<0){preview(-1);say("조각을 놓지 않았어요. 다시 자리를 골라 주세요.");return;}
+  if (g.type==="tray"&&!g.ghost) return;
+  if(idx<0){
+    preview(parked?.index??-1);
+    say(parked?parkedHelp:"조각을 놓지 않았어요. 다시 자리를 골라 주세요.");return;
+  }
   commit(idx);
 });
-function interrupt(){if(gesture){cancelGesture();preview(-1);say("조각을 다시 놓아 주세요.");}}
-document.addEventListener("pointercancel",interrupt);window.addEventListener("blur",interrupt);
+function interrupt(){
+  if (!gesture) return;
+  cancelGesture();preview(parked?.index??-1);say(parked?parkedHelp:"조각을 다시 놓아 주세요.");
+}
+document.addEventListener("pointercancel",ev=>{if (gesture?.id===ev.pointerId) interrupt();});
+window.addEventListener("blur",interrupt);
 tray.addEventListener("click",ev=>{
   const btn=ev.target.closest(".slot");
   if (ev.detail===0&&btn&&!btn.disabled)select(+btn.dataset.slot);
@@ -300,7 +401,7 @@ tray.addEventListener("click",ev=>{
 boardEl.addEventListener("click",ev=>{
   const el=ev.target.closest(".cell");
   if (!el) return;
-  if (ev.detail===0) commit(targetForCell(+el.dataset.index));
+  if (ev.detail===0) commit(+el.dataset.index);
   else if (selected===null&&el.isConnected&&!session().finishedAt) say("먼저 아래에서 놓을 조각을 골라 주세요.");
 });
 boardEl.addEventListener("focusin",ev=>{
@@ -308,19 +409,19 @@ boardEl.addEventListener("focusin",ev=>{
   const next=+ev.target.dataset.index;
   boardEl.querySelector('[tabindex="0"]')?.setAttribute("tabindex","-1");
   ev.target.tabIndex=0;focusIndex=next;
-  if (!gesture && selected!==null) preview(targetForCell(next));
+  if (!gesture && selected!==null) preview(next);
 });
 boardEl.addEventListener("keydown",ev=>{
   const n=state.size,r=Math.floor(focusIndex/n),c=focusIndex%n;
   if(ev.key==="Enter"||ev.key===" "){
-    ev.preventDefault();commit(targetForCell(focusIndex));if(!scoresDialog.open)boardEl.querySelector('[tabindex="0"]').focus();return;
+    ev.preventDefault();commit(focusIndex);if(!scoresDialog.open)boardEl.querySelector('[tabindex="0"]').focus();return;
   }
   const dir={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}[ev.key];
   if(!dir)return;
   ev.preventDefault();if(!finiteSpot(r+dir[0],c+dir[1]))return;
   const next=(r+dir[0])*n+c+dir[1];boardEl.querySelector('[data-index="'+next+'"]').focus();
 });
-document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!panel.open&&!scoresDialog.open){cancelGesture();selected=null;showSelection();preview(-1);say(defaultHelp);}});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!panel.open&&!scoresDialog.open){cancelGesture();clearParked();selected=null;showSelection();preview(-1);say(defaultHelp);}});
 if (playableSizes.length>1) {
   $("sizes").hidden=false;
   for (const n of playableSizes) {
@@ -345,7 +446,12 @@ function dialog(title,content){
 }
 $("closeBtn").onclick=()=>panel.close();
 $("photoBtn").onclick=()=>Portraits.openAlbum();
-$("helpBtn").onclick=()=>dialog("놀이 방법",`<ol><li>아래 조각 세 개 중 하나를 골라요. 색은 달라도 괜찮아요.</li><li><b>눌러 놓기</b>는 조각을 누른 뒤, 흰 점이 올 빈칸을 눌러요.</li><li><b>끌어 놓기</b>는 조각을 판으로 끌고 가서 점선을 보고 손을 떼요. 가장자리에서는 조각이 판 안쪽으로 들어오고, 다른 조각에 걸리면 바로 옆에 놓을 자리가 있는지 찾아줘요. 완성될 줄은 <b>금빛 테두리</b>로 미리 알려 드려요.</li><li>가로나 세로 한 줄이 차면 사라져요. 놓은 칸마다 1점이고, 한 번에 지운 줄에 따라 <b>1줄 +10점, 2줄 +30점, 3줄 +60점</b>을 더 받아요. 연달아 지우면 보너스 점수도 붙어요.</li></ol><p>키보드는 Tab으로 조각과 판을 찾고 방향키와 Enter로 놓을 수 있어요.</p><button class="primary" data-do="close">놀이로 돌아가기</button>`);
+$("helpBtn").onclick=()=>dialog("놀이 방법",`<ol>
+  <li>아래 조각 세 개 중 하나를 골라요. 색은 달라도 괜찮아요.</li>
+  <li><b>눌러 놓기</b>는 조각을 누른 뒤, 조각 가운데의 흰 점을 놓고 싶은 칸을 눌러요.</li>
+  <li><b>끌어 놓기</b>는 조각을 판으로 끌고 가서 점선 위치에 손을 떼요. 휴대폰에서는 엄지 위에 조각이 보여요. 완성될 줄은 금빛 테두리로 표시돼요.</li>
+  <li>놓을 수 없는 자리에서 손을 떼면 노란 줄무늬 조각이 칸에서 살짝 비껴 떠 있어요. 다시 잡아 옮기거나 놓을 칸을 눌러 주세요.</li>
+  <li>가로나 세로 한 줄이 차면 사라져요. 놓은 칸마다 1점이고, 한 번에 지운 줄에 따라 <b>1줄 +10점, 2줄 +30점, 3줄 +60점</b>을 더 받아요. 연달아 지우면 보너스 점수도 붙어요.</li></ol><p>키보드는 Tab으로 조각과 판을 찾고 방향키와 Enter로 놓을 수 있어요.</p><button class="primary" data-do="close">놀이로 돌아가기</button>`);
 function pause(){dialog("잠깐 쉬기",`<p>현재 점수는 <b>${points(board().score)}점</b>이에요. 같은 기기와 브라우저에서 두던 판을 이어 할 수 있어요.</p><p>${navigator.serviceWorker?.controller?"오프라인 준비가 끝났어요.":"온라인에서 게임을 이용하고 있어요."}</p><div class="stack"><button class="primary" data-do="close">이어 하기</button><button data-do="new">새 판 시작</button></div>`);}
 $("pauseBtn").onclick=pause;
 function confirmNew(){dialog("새 판을 시작할까요?",`<p>지금 판의 점수는 점수판에 남지 않아요.</p><div class="stack"><button class="primary" data-do="restart">새 판 시작</button><button data-do="close">계속하기</button></div>`);}
